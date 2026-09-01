@@ -1,0 +1,5 @@
+score_min,score_max,limite_maximo_permitido,descricao_faixa
+0,299,1000.00,Faixa Inicial (Risco Alto)
+300,599,5000.00,Faixa Intermediária (Risco Moderado)
+600,799,15000.00,Faixa Positiva (Baixo Risco)
+800,1000,50000.00,Faixa Premium (Risco Mínimo)
