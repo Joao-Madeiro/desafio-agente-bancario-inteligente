@@ -119,7 +119,7 @@ Acesse:
 - Interface web: `http://127.0.0.1:8000/`
 - Swagger: `http://127.0.0.1:8000/docs`
 - Health check: `http://127.0.0.1:8000/api/health`
-
+- Projeto Hospedado no Vercel : https://desafio-agente-bancario-inteligente.vercel.app/
 ### Interface Streamlit
 
 ```bash
