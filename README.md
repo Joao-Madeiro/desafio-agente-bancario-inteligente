@@ -126,6 +126,25 @@ Acesse:
 streamlit run app_streamlit.py
 ```
 
+### Deploy no Vercel
+
+O projeto possui `pyproject.toml` e `vercel.json` para expor `src.api.main:app` como uma função FastAPI. No painel do Vercel:
+
+1. Importe o repositório.
+2. Não configure Build Command nem Output Directory.
+3. Adicione `GOOGLE_API_KEY` nas Environment Variables.
+4. Opcionalmente, adicione `GEMINI_MODEL`.
+5. Faça o deploy e acesse a URL gerada.
+
+O `run.py` é usado apenas localmente. No Vercel, o FastAPI é executado como função serverless.
+
+Limitações da demonstração no Vercel:
+
+- Os CSVs são copiados para `/tmp`, pois o filesystem do Vercel não permite escrita persistente no bundle.
+- Alterações de limite e score podem ser perdidas após uma nova instância ou novo deploy.
+- As sessões ficam em memória e podem não ser compartilhadas entre instâncias.
+- Para uso persistente, substitua os CSVs e o dicionário de sessões por um banco ou serviço externo.
+
 ## Estrutura do Projeto
 
 ```text
