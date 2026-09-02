@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Cliente(BaseModel):
     cpf: str
@@ -13,7 +13,7 @@ class Cliente(BaseModel):
 
 class SolicitacaoAumento(BaseModel):
     cpf_cliente: str
-    data_hora_solicitacao: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    data_hora_solicitacao: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     limite_atual: float
     novo_limite_solicitado: float
     status_pedido: Literal["pendente", "aprovado", "rejeitado"]
@@ -43,7 +43,7 @@ class MessagePayload(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
     agent_name: Optional[str] = None
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -57,5 +57,6 @@ class ChatResponse(BaseModel):
     transition_occurred: bool = False
     authenticated: bool
     client_info: Optional[Cliente] = None
+    request_auth_modal: bool = False
     is_finished: bool = False
 

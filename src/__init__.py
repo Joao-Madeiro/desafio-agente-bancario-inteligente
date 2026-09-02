@@ -1,1 +1,1 @@
-"""Pacote principal do sistema Banco Ágil."""
+"""Pacote principal do sistema Madeiro Bank."""

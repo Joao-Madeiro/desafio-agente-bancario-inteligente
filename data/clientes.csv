@@ -1,5 +1,6 @@
 cpf,nome,data_nascimento,limite_credito,score_credito,email,telefone
-12345678900,Ana Silva,1990-05-15,2500.0,450,ana.silva@email.com,(11) 98765-4321
-98765432111,Carlos Souza,1985-10-22,12000.0,820,carlos.souza@email.com,(21) 99876-5432
+12345678900,Juliana Silva,1990-05-15,2500.0,450,ana.silva@email.com,(11) 98765-4321
+98765432111,Raul Alessandro,1985-10-22,12000.0,820,carlos.souza@email.com,(21) 99876-5432
 11122233344,Mariana Oliveira,1998-01-03,800.0,210,mariana.oliveira@email.com,(31) 97654-3210
-55566677788,Roberto Santos,1978-12-19,4000.0,580,roberto.santos@email.com,(41) 98888-7777
+55566677788,Ian Sampaio,1978-12-19,4000.0,580,roberto.santos@email.com,(41) 98888-7777
+07749642196,João Madeiro,2004-04-05,12000.0,800,joao.madeiro@email.com,(21) 98888-7777

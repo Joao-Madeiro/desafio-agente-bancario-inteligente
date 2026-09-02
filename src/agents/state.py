@@ -13,4 +13,6 @@ class AgentState(TypedDict):
     client_name: Optional[str]
     auth_attempts: int
     interview_data: Dict[str, Any]
+    interview_completed: bool
+    request_auth_modal: bool
     is_finished: bool

@@ -4,11 +4,11 @@ from langchain_core.tools import tool
 def encerrar_sessao_atendimento() -> str:
     """Encerra formalmente a sessão de atendimento bancário quando o cliente se despede
     ou solicita o encerramento do atendimento."""
-    return "SESSAO_ENCERRADA: Atendimento finalizado com sucesso. O Banco Ágil agradece o seu contato!"
+    return "SESSAO_ENCERRADA: Atendimento finalizado com sucesso. O Madeiro Bank agradece o seu contato!"
 
 @tool
 def transferir_para_agente(agente: str) -> str:
-    """Transfere o atendimento para outro agente especializado do Banco Ágil, quando a
+    """Transfere o atendimento para outro agente especializado do Madeiro Bank, quando a
     solicitação do cliente estiver fora do seu escopo de atuação. Use esta ferramenta em
     vez de tentar atender o assunto diretamente.
     Parâmetro `agente`: 'credit' (crédito/limites), 'interview' (entrevista de crédito /

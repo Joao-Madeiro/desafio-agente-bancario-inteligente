@@ -59,7 +59,7 @@ def consultar_cotacao_moeda(moeda: str = "USD") -> str:
         return (
             f"COTACAO_SUCESSO (Referencial): Cotação do {CURRENCY_NAMES.get(moeda_code, moeda_code)} ({moeda_code}/BRL): "
             f"Compra: R$ {compra:.2f} | Venda: R$ {venda:.2f} | Variação: {pct:+.2f}% | "
-            f"Referência do Banco Ágil."
+            f"Referência do Madeiro Bank."
         )
 
     return f"ERRO: Não foi possível obter a cotação para a moeda '{moeda_code}'. Moedas disponíveis: USD, EUR, GBP, BTC, CAD, JPY."

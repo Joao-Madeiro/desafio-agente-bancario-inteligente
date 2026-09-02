@@ -1,160 +1,164 @@
-# 🏦 Banco Ágil - Sistema de Atendimento Bancário Inteligente
+# Madeiro Bank
 
-Sistema de atendimento ao cliente multiespecialista baseado em inteligência artificial desenvolvido para o **Banco Ágil**. A solução orquestra agentes autônomos com escopos de atuação bem delimitados, utilizando **LangChain**, **LangGraph**, **Google Gemini** (`langchain-google-genai`), backend de alta performance em **FastAPI** e uma interface web moderna e reativa em **React**.
+Sistema de atendimento bancário multiespecialista com agentes de IA, desenvolvido para o desafio técnico de Agentes de IA. A aplicação usa Google Gemini com tool calling, LangGraph para orquestração, FastAPI como backend e uma interface React servida pelo próprio backend. Também há uma interface alternativa em Streamlit.
 
----
+## Visão Geral do Projeto
 
-## 1. 📌 Visão Geral do Projeto
+O Madeiro Bank simula o atendimento de um banco digital. O cliente conversa com um único assistente, enquanto o sistema encaminha internamente cada solicitação para o agente adequado.
 
-O **Banco Ágil** automatiza o ciclo completo de atendimento bancário digital através de agentes cognitivos especializados. Cada agente opera estritamente dentro de seu domínio funcional, interagindo de forma coordenada e fluida com o cliente por meio de transições implícitas (o usuário percebe um único assistente bancário com múltiplas competências).
+Agentes disponíveis:
 
-### Agentes Especializados do Sistema:
-- 🛡️ **Agente de Triagem**: Porta de entrada e segurança, responsável por recepcionar o usuário, autenticar credenciais contra a base cadastral com tolerância a 3 tentativas e direcionar a demanda para o especialista competente.
-- 💳 **Agente de Crédito**: Especialista em crédito que consulta limites vigentes, recebe pedidos de aumento de limite, valida a elegibilidade do pedido contra a matriz de score do banco e registra os pedidos formais.
-- 📝 **Agente de Entrevista de Crédito**: Conduz entrevistas financeiras conversacionais estruturadas para coletar dados socioeconômicos e recalcular o score de crédito do cliente com base em fórmula matemática ponderada.
-- 💱 **Agente de Câmbio**: Fornece cotações de moedas estrangeiras (Dólar, Euro, Bitcoin, Libra, etc.) em tempo real via integração com APIs externas.
+- **Triagem**: autentica o cliente e identifica a necessidade.
+- **Crédito**: consulta limite e processa pedidos de aumento.
+- **Entrevista de Crédito**: coleta dados financeiros e recalcula o score.
+- **Câmbio**: consulta cotações de moedas em uma API externa.
 
----
-
-## 2. 🏗️ Arquitetura do Sistema
-
-A arquitetura do projeto foi estruturada em camadas independentes, garantindo desacoplamento, rastreabilidade, persistência segura em arquivos CSV e suporte a execuções concorrentes:
+## Arquitetura do Sistema
 
 ```mermaid
 flowchart TD
-    User([Cliente / Usuário]) <--> UI[Interface Web React / Streamlit]
-    UI <--> API[FastAPI Backend - REST Endpoints]
-    API <--> Graph[Orquestrador LangGraph StateGraph]
-
-    subgraph Agentes Especializados
-        Triage[Agente de Triagem]
-        Credit[Agente de Crédito]
-        Interview[Agente de Entrevista]
-        Exchange[Agente de Câmbio]
-    end
-
-    Graph --> Triage
-    Graph --> Credit
-    Graph --> Interview
-    Graph --> Exchange
-
-    subgraph Camada de Ferramentas & Dados
-        T_Auth[autenticar_cliente]
-        T_Credit[consultar_limite / solicitar_aumento]
-        T_Interview[processar_entrevista_e_score]
-        T_Exchange[consultar_cotacao_moeda]
-        T_Session[encerrar_sessao]
-
-        DB_Clientes[(clientes.csv)]
-        DB_Solicitacoes[(solicitacoes_aumento_limite.csv)]
-        DB_Score[(score_limite.csv)]
-        API_AwesomeAPI[API de Câmbio em Tempo Real]
-    end
-
-    Triage --> T_Auth --> DB_Clientes
-    Credit --> T_Credit --> DB_Clientes & DB_Solicitacoes & DB_Score
-    Interview --> T_Interview --> DB_Clientes
-    Exchange --> T_Exchange --> API_AwesomeAPI
+    Cliente --> Interface
+    Interface --> API[FastAPI]
+    API --> Orquestrador[LangGraph StateGraph]
+    Orquestrador --> Triagem
+    Orquestrador --> Credito
+    Orquestrador --> Entrevista
+    Orquestrador --> Cambio
+    Triagem --> Auth[autenticar_cliente]
+    Triagem --> Modal[solicitar_dados_autenticacao]
+    Credito --> CSV1[clientes.csv]
+    Credito --> CSV2[solicitacoes_aumento_limite.csv]
+    Credito --> CSV3[score_limite.csv]
+    Entrevista --> CSV1
+    Cambio --> Cotacao[AwesomeAPI]
 ```
 
-### Fluxo de Manipulação de Dados:
-1. **Autenticação & Triagem**: Os dados de entrada (CPF e Data de Nascimento) são normalizados (limpeza de caracteres não numéricos e padronização de datas) e validados contra `data/clientes.csv`.
-2. **Avaliação de Crédito**: Solicitações de aumento de limite são registradas formalmente em `data/solicitacoes_aumento_limite.csv` (`cpf_cliente`, `data_hora_solicitacao` em ISO 8601, `limite_atual`, `novo_limite_solicitado`, `status_pedido`). A aprovação/rejeição consulta as faixas de score em `data/score_limite.csv`.
-3. **Recálculo de Score**: A entrevista financeira aplica a fórmula ponderada e atualiza o campo `score_credito` do cliente no arquivo `data/clientes.csv`.
+### Fluxo de Atendimento
 
----
+1. O cliente envia a primeira mensagem pelo chat.
+2. A Triagem solicita autenticação por tool call.
+3. A interface exibe um botão no chat. O modal de CPF e data de nascimento só abre após o clique.
+4. Os dados preenchidos são enviados à conversa e a Triagem chama `autenticar_cliente`.
+5. Após a autenticação, a solicitação é encaminhada internamente ao agente responsável.
+6. As trocas entre agentes não geram novas saudações, mensagens técnicas ou banners de transferência.
+7. O cliente pode encerrar a sessão a qualquer momento pela ferramenta `encerrar_sessao_atendimento`.
 
-## 3. 🚀 Funcionalidades Implementadas
+### Dados
 
-- **Autenticação Resiliente**: Sanitização de CPF e parsing flexível de datas (`DD/MM/AAAA`, `AAAA-MM-DD`, `DD-MM-AAAA`). Bloqueio e encerramento cordial após 3 falhas consecutivas.
-- **Roteamento Implícito Multiagente**: Transição transparente de agentes durante o diálogo (ex.: do Crédito para Entrevista e de volta ao Crédito).
-- **Cálculo de Score Ponderado**:
-  $$\text{Score} = \left(\frac{\text{renda}}{\text{despesas} + 1}\right) \times 30 + \text{peso\_emprego} + \text{peso\_dependentes} + \text{peso\_dividas}$$
-  *(Resultado limitado deterministicamente entre 0 e 1000 pontos)*.
-- **Cotações de Câmbio em Tempo Real**: Consulta dinâmica à AwesomeAPI com cotação de compra, venda, variação percentual diária e timestamp, com fallback resiliente.
-- **Encerramento Global Controlado**: Suporte a ferramenta de encerramento (`encerrar_sessao_atendimento`) a qualquer instante da conversa.
-- **Interface Web React Premium**: Chat em tempo real com identificador de agente ativo, painel com dados da conta do cliente autenticado e **inspetor ao vivo dos arquivos CSV** com botão de teste rápido.
-- **Interface Alternativa Streamlit**: Interface simplificada em Streamlit para demonstrações rápidas.
+- `data/clientes.csv`: cadastro, limite, score e dados de contato dos clientes.
+- `data/score_limite.csv`: faixas de score e limite máximo permitido.
+- `data/solicitacoes_aumento_limite.csv`: solicitações de aumento com as colunas `cpf_cliente`, `data_hora_solicitacao`, `limite_atual`, `novo_limite_solicitado` e `status_pedido` (`pendente`, `aprovado` ou `rejeitado`), usando timestamp UTC.
+- As operações de escrita usam `threading.Lock` para evitar conflitos entre requisições.
 
----
+## Funcionalidades Implementadas
 
-## 4. 💡 Desafios Enfrentados e Soluções
+- Autenticação por CPF e data de nascimento contra `clientes.csv`.
+- Normalização de CPF, incluindo máscara e zeros à esquerda.
+- Aceite de datas nos formatos `DD/MM/AAAA`, `DD-MM-AAAA`, `AAAA-MM-DD` e formato compacto.
+- Até três tentativas consecutivas de autenticação; após a terceira falha, a sessão é encerrada.
+- Modal de autenticação com máscaras visuais para CPF e data de nascimento.
+- Consulta de limite e score do cliente autenticado.
+- Solicitação formal de aumento de limite com as colunas exigidas pelo desafio.
+- Aprovação ou rejeição conforme `score_limite.csv`.
+- Entrevista com renda, emprego, despesas, dependentes e dívidas.
+- Recálculo de score entre 0 e 1000 e atualização de `clientes.csv`. A fórmula usa `(renda / (despesas + 1)) * 30`, somada aos pesos de emprego, dependentes e dívidas.
+- Retorno automático à análise de crédito após a entrevista.
+- Cotação de USD, EUR, GBP, BTC e outras moedas pela AwesomeAPI, com fallback referencial.
+- Encerramento global por tool call.
+- Interface React com tema claro e escuro, toggle de sugestões rápidas e efeito de digitação nas respostas.
+- Interface Streamlit para demonstração alternativa.
+- Endpoints de saúde, chat, reset, clientes, solicitações, regras de score e cotações.
 
-| Desafio | Causa Raiz | Solução Adotada |
-| :--- | :--- | :--- |
-| **Transições Implícitas de Agentes** | O LLM pode perder o contexto ou exibir mensagens técnicas de transição. | Implementação de um `StateGraph` (LangGraph) com injeção dinâmica de contexto cadastral e detecção supervisionada de intenções de roteamento. |
-| **Variação de Formatos de CPF e Data** | Usuários informam datas e CPFs com formatos diversos (`12345678900`, `123.456.789-00`, `15/05/1990`, `1990-05-15`). | Módulo utilitário `parse_date` e `clean_cpf` que normaliza múltiplos formatos antes de qualquer consulta ao banco de dados. |
-| **Concorrência e Integridade de CSV** | Múltiplas requisições simultâneas lendo/escrevendo arquivos CSV podem gerar conflitos de I/O. | Implementação de bloqueio de concorrência (`threading.Lock`) no `CSVManager`, garantindo atomicidade nas operações. |
-| **Disponibilidade da API de Câmbio** | Falhas de rede ou rate limits em APIs externas de cotação. | Criação de timeout curto (6s) e fallback automático com dados referenciais claros e aviso transparente ao usuário. |
-| **Ambiente sem Node.js Local** | Execução de frontends modernos sem necessidade de gerenciar `npm`/`node`. | Arquitetura SPA React 18 moderna servida nativamente pelo FastAPI via CDN e Babel Standalone, sem complexidade de build. |
+## Desafios Enfrentados e Como Foram Resolvidos
 
----
+| Desafio | Solução |
+| --- | --- |
+| Manter uma conversa única entre agentes | Estado compartilhado no LangGraph e roteamento interno sem mensagens de transferência. |
+| Evitar chamadas de ferramentas incompatíveis com o Gemini | Histórico sanitizado e resultados de tools reapresentados como contexto textual interno. |
+| Autenticação com diferentes formatos de entrada | Normalização de CPF e parsing de múltiplos formatos de data. |
+| Persistência concorrente em CSV | Bloqueio compartilhado nas operações de leitura e escrita. |
+| Falha de API de câmbio | Timeout e valores referenciais de fallback com indicação ao cliente. |
+| Respostas técnicas aparecendo para o cliente | Resultados internos não são persistidos no histórico exibido. |
 
-## 5. 🛠️ Escolhas Técnicas e Justificativas
+## Escolhas Técnicas e Justificativas
 
-- **Python 3.11 + FastAPI**: Escolhido pela alta performance assíncrona, documentação automática OpenAPI/Swagger e facilidade de integração com bibliotecas de IA.
-- **LangChain + LangGraph**: Padrão da indústria para desenvolvimento de sistemas multiagente com grafos de estado, permitindo controle fino do ciclo de vida, memória conversacional e chamada de ferramentas (*Tool Calling*).
-- **Google Gemini API (`langchain-google-genai`)**: Modelo de linguagem de última geração (`gemini-2.5-flash` / `gemini-1.5-flash`), oferecendo alta velocidade de resposta, suporte nativo a function calling e excelente custo-benefício.
-- **Pandas + CSV Manager Tipado**: Utilização de `pandas` e `pydantic` para garantir validação estrita de esquemas e persistência consistente dos arquivos CSV requeridos pelo desafio.
-- **React 18 Single-Page Application**: Interface rica com feedback visual instantâneo, visualizador de CSVs em tempo real e experiência de banco digital.
+- **Python**: integração simples com IA, CSV e APIs externas.
+- **LangChain**: integração com Gemini e definição das ferramentas dos agentes.
+- **LangGraph**: controle explícito do estado, roteamento e ciclo de ferramentas.
+- **Google Gemini**: suporte a function calling e baixa latência.
+- **FastAPI**: API REST, Swagger automático e gerenciamento de sessões.
+- **Pandas**: leitura, validação e persistência das tabelas CSV.
+- **Pydantic**: modelos de dados e validação de payloads.
+- **React 18 via CDN**: interface sem etapa de build, compatível com o servidor FastAPI.
+- **Streamlit**: interface alternativa para demonstrações rápidas.
 
----
-
-## 6. 📖 Tutorial de Execução e Testes
+## Tutorial de Execução
 
 ### Pré-requisitos
-- Python 3.10 ou superior instalado.
-- Chave de API do Google Gemini ([Google AI Studio](https://aistudio.google.com/)).
 
-### Passo 1: Clonar o Repositório e Instalar Dependências
-```bash
-git clone https://github.com/Joao-Madeiro/desafio-agente-bancario-inteligente.git
-cd desafio-agente-bancario-inteligente
+- Python 3.10 ou superior.
+- Chave da API do Google Gemini.
 
-# Instalação das dependências
-pip install -r requirements.txt
-```
+Crie um arquivo `.env` na raiz:
 
-### Passo 2: Configurar Variáveis de Ambiente
-Crie um arquivo `.env` na raiz do projeto baseado no `.env.example`:
 ```env
-GOOGLE_API_KEY=sua_chave_gemini_aqui
-GEMINI_MODEL=gemini-2.5-flash
+GOOGLE_API_KEY=sua_chave_gemini
+GEMINI_MODEL=gemini-3.5-flash-lite
 HOST=127.0.0.1
 PORT=8000
 ```
 
-### Passo 3: Executar a Aplicação Principal (FastAPI + React UI)
+### Interface Principal
+
 ```bash
 python run.py
 ```
-Acesse no navegador:
-- **Interface Web do Banco Ágil**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- **Documentação da API (Swagger)**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-### Passo 4 (Opcional): Executar via Streamlit
+Acesse:
+
+- Interface web: `http://127.0.0.1:8000/`
+- Swagger: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/api/health`
+
+### Interface Streamlit
+
 ```bash
 streamlit run app_streamlit.py
 ```
 
-### Passo 5: Executar os Testes Automatizados
-Para rodar toda a suíte de testes com cobertura completa:
-```bash
-pytest tests/ -v
+## Estrutura do Projeto
+
+```text
+.
+├── app_streamlit.py
+├── data/
+├── run.py
+├── src/
+│   ├── agents/       # prompts, estado e orquestração LangGraph
+│   ├── api/          # FastAPI e interface React estática
+│   ├── database/     # gerenciamento dos CSVs
+│   ├── models/       # schemas Pydantic
+│   └── tools/        # autenticação, crédito, entrevista, câmbio e sessão
+└── README.md
 ```
 
----
+## Conformidade com o Desafio Técnico
 
-## 👥 Clientes de Teste Pré-cadastrados
+| Requisito | Implementação |
+| --- | --- |
+| Triagem com saudação, CPF e data de nascimento | Agente de Triagem e `autenticar_cliente`. |
+| Validação contra `clientes.csv` | `CSVManager.validate_client`. |
+| Três falhas e encerramento | Contador `auth_attempts` e `encerrar_sessao_atendimento`. |
+| Consulta e aumento de limite | Agente de Crédito e `credit_tools.py`. |
+| Registro CSV do pedido | `solicitacoes_aumento_limite.csv` com as cinco colunas exigidas. |
+| Aprovação por score | Consulta a `score_limite.csv`. |
+| Entrevista financeira | Cinco campos exigidos e cálculo ponderado. |
+| Atualização e retorno ao crédito | Atualização de `clientes.csv` e transferência automática. |
+| Câmbio em tempo real | AwesomeAPI com fallback controlado. |
+| Encerramento em qualquer etapa | Tool disponível para todos os agentes. |
+| Tratamento de erros | Validações, mensagens controladas, timeout e fallback. |
+| Interface para simular atendimento | React e Streamlit. |
 
-| Nome | CPF | Data de Nascimento | Limite Atual | Score | Cenário de Teste |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Ana Silva** | `12345678900` | `15/05/1990` | R$ 2.500,00 | 450 pts | Teste de aumento de limite intermediário e entrevista |
-| **Carlos Souza** | `98765432111` | `22/10/1985` | R$ 12.000,00 | 820 pts | Score alto: Aprovação de limites elevados até R$ 50k |
-| **Mariana Oliveira** | `11122233344` | `03/01/1998` | R$ 800,00 | 210 pts | Score inicial baixo: Rejeição de limite $\rightarrow$ Redirecionamento para Entrevista |
-| **Roberto Santos** | `55566677788` | `19/12/1978` | R$ 4.000,00 | 580 pts | Teste de consultas de câmbio e crédito |
+## Autor
 
----
-
-## 👨‍💻 Autor
-**João Madeiro**
+João Madeiro

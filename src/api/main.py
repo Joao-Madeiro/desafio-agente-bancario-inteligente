@@ -15,7 +15,7 @@ from src.models.schemas import ChatRequest, ChatResponse
 from src.tools.exchange_tools import consultar_cotacao_moeda
 
 app = FastAPI(
-    title="Banco Ágil - Agente Bancário Inteligente",
+    title="Madeiro Bank - Agente Bancário Inteligente",
     description="Sistema multiespecialista de atendimento bancário com LangChain, LangGraph e Google Gemini.",
     version="1.0.0",
 )
@@ -41,6 +41,8 @@ def get_session_state(session_id: str) -> AgentState:
             "client_name": None,
             "auth_attempts": 0,
             "interview_data": {},
+            "interview_completed": False,
+            "request_auth_modal": False,
             "is_finished": False,
         }
     return sessions[session_id]
@@ -53,7 +55,7 @@ def get_orchestrator() -> AgentOrchestrator:
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "Banco Ágil AI Agent"}
+    return {"status": "ok", "service": "Madeiro Bank AI Agent"}
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest):
@@ -62,7 +64,7 @@ async def chat_endpoint(payload: ChatRequest):
     if state.get("is_finished", False):
         return ChatResponse(
             session_id=payload.session_id,
-            response="Este atendimento foi encerrado. Para iniciar um novo contato com o **Banco Ágil**, reinicie a sessão.",
+            response="Este atendimento foi encerrado. Para iniciar um novo contato com o **Madeiro Bank**, reinicie a sessão.",
             active_agent="ended",
             authenticated=state.get("authenticated", False),
             client_info=csv_manager.find_client_by_cpf(state["client_cpf"]) if state.get("client_cpf") else None,
@@ -104,6 +106,7 @@ async def chat_endpoint(payload: ChatRequest):
             transition_occurred=transition_occurred,
             authenticated=state.get("authenticated", False),
             client_info=client_info,
+            request_auth_modal=state.get("request_auth_modal", False),
             is_finished=state.get("is_finished", False),
         )
 
@@ -121,6 +124,8 @@ def reset_session(session_id: Optional[str] = None):
         "client_name": None,
         "auth_attempts": 0,
         "interview_data": {},
+        "interview_completed": False,
+        "request_auth_modal": False,
         "is_finished": False,
     }
     return {"session_id": target_id, "message": "Sessão reiniciada com sucesso."}

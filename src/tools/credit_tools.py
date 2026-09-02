@@ -35,14 +35,20 @@ def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: float
     score_rule = csv_manager.get_score_rule_for_score(client.score_credito)
     max_permitido = score_rule.limite_maximo_permitido if score_rule else 0.0
 
+    pedido = csv_manager.record_limit_request(
+        cpf=client.cpf,
+        limite_atual=client.limite_credito,
+        novo_limite_solicitado=novo_limite,
+        status_pedido="pendente",
+    )
+
     if novo_limite <= max_permitido:
         status = "aprovado"
         csv_manager.update_client_limit(client.cpf, novo_limite)
-        csv_manager.record_limit_request(
-            cpf=client.cpf,
-            limite_atual=client.limite_credito,
-            novo_limite_solicitado=novo_limite,
-            status_pedido=status,
+        csv_manager.update_request_status(
+            pedido.cpf_cliente,
+            pedido.data_hora_solicitacao,
+            status,
         )
         return (
             f"SOLICITACAO_APROVADA: Parabéns! Seu pedido de aumento de limite para R$ {novo_limite:.2f} "
@@ -51,11 +57,10 @@ def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: float
         )
     else:
         status = "rejeitado"
-        csv_manager.record_limit_request(
-            cpf=client.cpf,
-            limite_atual=client.limite_credito,
-            novo_limite_solicitado=novo_limite,
-            status_pedido=status,
+        csv_manager.update_request_status(
+            pedido.cpf_cliente,
+            pedido.data_hora_solicitacao,
+            status,
         )
         return (
             f"SOLICITACAO_REJEITADA: A solicitação de aumento para R$ {novo_limite:.2f} foi REJEITADA. "

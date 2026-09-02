@@ -2,26 +2,27 @@ import ast
 import json
 import re
 from typing import Any, Dict, List, Optional
-from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 
 from src.agents.llm import get_llm
 from src.agents.prompts import CREDIT_PROMPT, EXCHANGE_PROMPT, INTERVIEW_PROMPT, TRIAGE_PROMPT
 from src.agents.state import AgentState, AgentType
 from src.database.csv_manager import clean_cpf, csv_manager
-from src.tools.auth_tools import autenticar_cliente
+from src.tools.auth_tools import autenticar_cliente, solicitar_dados_autenticacao
 from src.tools.credit_tools import consultar_limite_credito, processar_solicitacao_aumento_limite
 from src.tools.exchange_tools import consultar_cotacao_moeda
 from src.tools.interview_tools import processar_entrevista_e_atualizar_score
 from src.tools.session_tools import encerrar_sessao_atendimento, transferir_para_agente
 
-TRIAGE_TOOLS = [autenticar_cliente, transferir_para_agente, encerrar_sessao_atendimento]
+TRIAGE_TOOLS = [solicitar_dados_autenticacao, autenticar_cliente, transferir_para_agente, encerrar_sessao_atendimento]
 CREDIT_TOOLS = [consultar_limite_credito, processar_solicitacao_aumento_limite, transferir_para_agente, encerrar_sessao_atendimento]
 INTERVIEW_TOOLS = [processar_entrevista_e_atualizar_score, transferir_para_agente, encerrar_sessao_atendimento]
 EXCHANGE_TOOLS = [consultar_cotacao_moeda, transferir_para_agente, encerrar_sessao_atendimento]
 
 ALL_TOOLS = {
     "autenticar_cliente": autenticar_cliente,
+    "solicitar_dados_autenticacao": solicitar_dados_autenticacao,
     "consultar_limite_credito": consultar_limite_credito,
     "processar_solicitacao_aumento_limite": processar_solicitacao_aumento_limite,
     "processar_entrevista_e_atualizar_score": processar_entrevista_e_atualizar_score,
@@ -183,6 +184,26 @@ def execute_tools(messages: List[BaseMessage]) -> List[ToolMessage]:
             )
     return tool_messages
 
+def _sanitize_history(messages: List[BaseMessage]) -> List[BaseMessage]:
+    """Remove tool calls e respostas de ferramentas do histórico persistido.
+
+    O Gemini (modelos com thinking) exige `thought_signature` ao reenviar
+    function calls e rejeita a requisição quando a assinatura não está
+    disponível. Para evitar o erro 400, o histórico enviado contém apenas
+    mensagens de texto (humanas e do assistente).
+    """
+    clean: List[BaseMessage] = []
+    for m in messages:
+        if isinstance(m, ToolMessage):
+            continue
+        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+            text = extract_clean_text(m.content)
+            if text:
+                clean.append(AIMessage(content=text))
+            continue
+        clean.append(m)
+    return clean
+
 class AgentOrchestrator:
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
@@ -237,46 +258,93 @@ class AgentOrchestrator:
         state: AgentState,
         agent_name: AgentType,
     ) -> Dict[str, Any]:
-        messages = list(state["messages"])
+        messages = _sanitize_history(state["messages"])
         client_context = ""
         if state.get("authenticated") and state.get("client_cpf"):
             client = csv_manager.find_client_by_cpf(state["client_cpf"])
             if client:
                 client_context = (
-                    f"\n\n[CONTEXTO DO CLIENTE ATUAL - BANCO ÁGIL]\n"
+                    f"\n\n[CONTEXTO DO CLIENTE ATUAL - MADEIRO BANK]\n"
                     f"Nome: {client.nome}\nCPF: {client.cpf}\n"
                     f"Limite Atual: R$ {client.limite_credito:.2f}\n"
                     f"Score Atual: {client.score_credito} pontos"
                 )
 
-        sys_msg = SystemMessage(content=prompt + client_context)
+        redirect_note = ""
+        if agent_name == "credit" and state.get("interview_completed"):
+            # Retomada pós-entrevista: o Agente de Crédito recebe contexto limpo
+            # (sem o transcript da entrevista) para oferecer a nova análise sem
+            # risco de redirecionamentos de ping-pong com o Agente de Entrevista.
+            messages = [
+                HumanMessage(
+                    content="[RETOMADA PÓS-ENTREVISTA] O cliente acabou de concluir a "
+                    "entrevista financeira. Continue o atendimento conforme o contexto "
+                    "de redirecionamento do sistema."
+                )
+            ]
+            redirect_note = (
+                "\n\n[CONTEXTO DE REDIRECIONAMENTO]\n"
+                "O cliente acabou de concluir a Entrevista Financeira de reavaliação de score. "
+                "O score atualizado já está no contexto do cliente acima. Retome o atendimento "
+                "oferecendo uma NOVA ANÁLISE de limite: apresente o novo score e pergunte se o "
+                "cliente deseja solicitar um novo limite de crédito agora."
+            )
+
+        sys_msg = SystemMessage(content=prompt + client_context + redirect_note)
         conversation = [sys_msg] + messages
 
         updated_state: Dict[str, Any] = {
             "messages": [],
             "active_agent": agent_name,
+            "request_auth_modal": False,
         }
+        if agent_name == "credit" and state.get("interview_completed"):
+            updated_state["interview_completed"] = False
         transfer_target: Optional[str] = None
+        auth_attempts = state.get("auth_attempts", 0)
 
         # Loop agêntico: executa ferramentas até o modelo produzir uma resposta final
         # em texto, ou solicitar transferência para outro especialista.
         for _ in range(8):
             raw_response = llm_with_tools.invoke(conversation)
-            conversation.append(raw_response)
-            updated_state["messages"].append(raw_response)
 
             tool_calls = getattr(raw_response, "tool_calls", None)
             if not tool_calls:
+                conversation.append(raw_response)
+                updated_state["messages"].append(raw_response)
                 break
 
             tool_results = execute_tools([raw_response])
-            conversation.extend(tool_results)
-            updated_state["messages"].extend(tool_results)
+
+            # Bloqueio de escopo: a Triagem só transfere após autenticar o cliente.
+            for tr in tool_results:
+                if "TRANSFERENCIA:" in str(tr.content):
+                    already_authed = state.get("authenticated", False) or updated_state.get("authenticated", False)
+                    if agent_name == "triage" and not already_authed:
+                        tr.content = (
+                            "ERRO: Autenticação pendente. Chame `solicitar_dados_autenticacao` "
+                            "para coletar os dados e `autenticar_cliente` antes de transferir "
+                            "o atendimento para outro agente."
+                        )
+
+            # Os resultados das ferramentas são reapresentados ao modelo como
+            # mensagem de texto (nunca como functionCall/response), evitando o
+            # requisito de thought_signature do Gemini em requisições seguintes.
+            results_lines = [f"- Ferramenta `{tr.name}`: {tr.content}" for tr in tool_results]
+            summary = HumanMessage(
+                content="[RESULTADOS DAS FERRAMENTAS - DADOS INTERNOS DO SISTEMA]\n"
+                + "\n".join(results_lines)
+                + "\n\nContinue o atendimento com base nos resultados acima."
+            )
+            conversation.append(summary)
 
             for tr in tool_results:
                 tr_content = str(tr.content)
                 if "AUTENTICACAO_SUCESSO" in tr_content:
                     updated_state["authenticated"] = True
+                    updated_state["auth_attempts"] = 0
+                    updated_state["request_auth_modal"] = False
+                    auth_attempts = 0
                     match_cpf = re.search(r"CPF:\s*(\d+)", tr_content)
                     match_nome = re.search(r"Cliente\s+(.+?)\s+autenticado", tr_content)
                     if match_cpf:
@@ -284,16 +352,21 @@ class AgentOrchestrator:
                     if match_nome:
                         updated_state["client_name"] = match_nome.group(1)
                 elif "FALHA_AUTENTICACAO" in tr_content:
-                    attempts = state.get("auth_attempts", 0) + 1
-                    updated_state["auth_attempts"] = attempts
-                    if attempts >= 3:
+                    auth_attempts += 1
+                    updated_state["auth_attempts"] = auth_attempts
+                    if auth_attempts >= 3:
                         updated_state["is_finished"] = True
                         updated_state["active_agent"] = "ended"
                 elif "SESSAO_ENCERRADA" in tr_content:
                     updated_state["is_finished"] = True
                     updated_state["active_agent"] = "ended"
+                elif "SOLICITAR_DADOS_AUTENTICACAO" in tr_content:
+                    updated_state["request_auth_modal"] = True
                 elif "ENTREVISTA_CONCLUIDA" in tr_content:
+                    updated_state["interview_completed"] = True
                     updated_state["active_agent"] = "credit"
+                    if agent_name == "interview":
+                        transfer_target = "credit"
                 elif "TRANSFERENCIA:" in tr_content:
                     target = tr_content.split("TRANSFERENCIA:", 1)[1].strip().lower()
                     if target in ("credit", "interview", "exchange") and target != agent_name:
@@ -302,6 +375,32 @@ class AgentOrchestrator:
 
             if transfer_target:
                 break
+
+        if not updated_state["messages"] and not transfer_target:
+            if updated_state.get("is_finished"):
+                fallback_text = "Atendimento encerrado. O Madeiro Bank agradece o seu contato!"
+            elif updated_state.get("request_auth_modal"):
+                fallback_text = (
+                    "Para continuar com segurança, clique no botão de autenticação "
+                    "e informe seu CPF e sua Data de Nascimento."
+                )
+            else:
+                fallback_text = (
+                    "Não consegui concluir esta solicitação agora. "
+                    "Por favor, tente novamente."
+                )
+            updated_state["messages"].append(AIMessage(content=fallback_text))
+
+        if (
+            agent_name == "triage"
+            and not transfer_target
+            and not state.get("authenticated", False)
+            and not updated_state.get("authenticated", False)
+            and not updated_state.get("is_finished", False)
+        ):
+            # Garantia determinística: enquanto não houver autenticação, o botão
+            # de CPF e Data de Nascimento permanece disponível para nova tentativa.
+            updated_state["request_auth_modal"] = True
 
         if transfer_target:
             # A chamada de transferência é um controle interno: não deve entrar no

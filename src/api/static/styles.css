@@ -16,6 +16,19 @@
   animation: float 4s infinite ease-in-out;
 }
 
+@keyframes typing-cursor {
+  0%, 45% { opacity: 1; }
+  46%, 100% { opacity: 0; }
+}
+
+.typing-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: #6366f1;
+  font-weight: 700;
+  animation: typing-cursor 0.9s infinite;
+}
+
 .glass-panel {
   background: rgba(17, 24, 39, 0.75);
   backdrop-filter: blur(16px);
@@ -142,5 +155,171 @@
   border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin: 0.75rem 0;
+}
+
+/* Madeiro Bank light theme */
+.theme-light-body {
+  background: #edf3f8 !important;
+  color: #24344b !important;
+}
+
+.theme-light,
+.theme-light[class*="bg-[#0a0e17]"] {
+  background-color: #f4f7fb !important;
+  color: #24344b !important;
+}
+
+.theme-light [class*="bg-[#0a0e17]"] {
+  background-color: #f4f7fb !important;
+}
+
+.theme-light [class*="bg-slate-950"] {
+  background-color: rgba(226, 234, 243, 0.72) !important;
+}
+
+.theme-light [class*="bg-slate-900"] {
+  background-color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.theme-light [class*="bg-slate-800"] {
+  background-color: #e6edf5 !important;
+}
+
+.theme-light [class*="bg-slate-700"] {
+  background-color: #dce5ef !important;
+}
+
+.theme-light [class*="from-cyan-950"] {
+  background-image: linear-gradient(110deg, #dff8fb, #e6efff) !important;
+}
+
+.theme-light [class*="bg-cyan-950"] {
+  background-color: #dff8fb !important;
+}
+
+.theme-light [class*="bg-emerald-950"] {
+  background-color: #e0f7ef !important;
+}
+
+.theme-light [class*="bg-purple-950"] {
+  background-color: #eee7ff !important;
+}
+
+.theme-light [class*="bg-amber-950"] {
+  background-color: #fff3d9 !important;
+}
+
+.theme-light .glass-panel {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: #d7e1ec !important;
+  box-shadow: 0 12px 32px rgba(39, 66, 101, 0.08);
+}
+
+.theme-light .glass-card {
+  background: rgba(238, 244, 249, 0.9) !important;
+  border-color: #dce5ee !important;
+}
+
+.theme-light .auth-modal-card {
+  background: #ffffff !important;
+  border-color: #cdd9e6 !important;
+}
+
+.theme-light .auth-modal-header {
+  background: #ffffff !important;
+  border-bottom-color: #e1e8f0 !important;
+}
+
+.theme-light [class~="text-white"] {
+  color: #17253b !important;
+}
+
+.theme-light [class*="bg-gradient-"][class~="text-white"] {
+  color: #ffffff !important;
+}
+
+.theme-light [class~="text-slate-100"],
+.theme-light [class~="text-slate-200"],
+.theme-light [class~="text-slate-300"] {
+  color: #26374e !important;
+}
+
+.theme-light [class~="text-slate-400"] {
+  color: #53657d !important;
+}
+
+.theme-light [class~="text-slate-500"],
+.theme-light [class~="text-slate-600"] {
+  color: #718198 !important;
+}
+
+.theme-light [class*="border-slate-"] {
+  border-color: #d5e0eb !important;
+}
+
+.theme-light [class*="border-cyan-"] {
+  border-color: #7bcbd5 !important;
+}
+
+.theme-light [class*="text-cyan-300"] {
+  color: #087f92 !important;
+}
+
+.theme-light [class*="text-emerald-300"] {
+  color: #087a5c !important;
+}
+
+.theme-light [class*="text-purple-300"] {
+  color: #7044b5 !important;
+}
+
+.theme-light [class*="text-amber-300"] {
+  color: #9a6500 !important;
+}
+
+.theme-light .markdown-content {
+  color: #2d3d54;
+}
+
+.theme-light .message-user .markdown-content,
+.theme-light .message-user .markdown-content strong,
+.theme-light .message-user .markdown-content b,
+.theme-light .message-user .markdown-content em {
+  color: #ffffff !important;
+}
+
+.theme-light .markdown-content strong,
+.theme-light .markdown-content b,
+.theme-light .markdown-content h1,
+.theme-light .markdown-content h2,
+.theme-light .markdown-content h3,
+.theme-light .markdown-content h4 {
+  color: #17253b;
+}
+
+.theme-light .markdown-content em {
+  color: #53657d;
+}
+
+.theme-light .markdown-content code {
+  background-color: #e7edff;
+  color: #4b52b8;
+  border-color: #cbd4fb;
+}
+
+.theme-light .markdown-content blockquote {
+  color: #62748b;
+}
+
+.theme-light .markdown-content hr {
+  border-top-color: #d9e3ed;
+}
+
+.theme-light .custom-scrollbar::-webkit-scrollbar-track {
+  background: #e4ebf3;
+}
+
+.theme-light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.35);
 }
 

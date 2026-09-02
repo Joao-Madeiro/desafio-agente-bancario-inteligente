@@ -59,7 +59,7 @@ def processar_entrevista_e_atualizar_score(
     tem_dividas: str,
 ) -> str:
     """Calcula o novo score de crédito ponderado a partir das respostas da entrevista financeira
-    e atualiza a base de dados de clientes do Banco Ágil."""
+    e atualiza a base de dados de clientes do Madeiro Bank."""
     client = csv_manager.find_client_by_cpf(cpf)
     if not client:
         return "ERRO: Cliente não encontrado na base de dados para atualização de score."

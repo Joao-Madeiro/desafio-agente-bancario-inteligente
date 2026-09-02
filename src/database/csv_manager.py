@@ -1,6 +1,6 @@
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 import pandas as pd
@@ -12,6 +12,12 @@ _lock = threading.Lock()
 
 def clean_cpf(cpf: str) -> str:
     return re.sub(r"\D", "", str(cpf))
+
+
+def normalize_cpf(cpf: str) -> str:
+    """Normaliza CPFs numéricos, preservando zeros à esquerda."""
+    cleaned = clean_cpf(cpf)
+    return cleaned.zfill(11) if len(cleaned) <= 11 else cleaned
 
 def parse_date(date_str: str) -> Optional[str]:
     cleaned = str(date_str).strip()
@@ -154,9 +160,9 @@ class CSVManager:
         return rules
 
     def find_client_by_cpf(self, cpf: str) -> Optional[Cliente]:
-        raw_cpf = clean_cpf(cpf)
+        raw_cpf = normalize_cpf(cpf)
         df = self.get_clients_df()
-        df["cpf_clean"] = df["cpf"].astype(str).apply(clean_cpf)
+        df["cpf_clean"] = df["cpf"].astype(str).apply(normalize_cpf)
         matched = df[df["cpf_clean"] == raw_cpf]
         if matched.empty:
             return None
@@ -173,7 +179,7 @@ class CSVManager:
 
     def validate_client(self, cpf: str, data_nascimento: str) -> Tuple[bool, Optional[Cliente], Optional[str]]:
         raw_cpf = clean_cpf(cpf)
-        if not raw_cpf or len(raw_cpf) < 11:
+        if not raw_cpf or len(raw_cpf) != 11:
             return False, None, "CPF com formato inválido. Por favor informe um CPF válido com 11 dígitos."
 
         parsed_user_dob = parse_date(data_nascimento)
@@ -233,7 +239,7 @@ class CSVManager:
         raw_cpf = clean_cpf(cpf)
         record = SolicitacaoAumento(
             cpf_cliente=raw_cpf,
-            data_hora_solicitacao=datetime.utcnow().isoformat(),
+            data_hora_solicitacao=datetime.now(timezone.utc).isoformat(),
             limite_atual=float(limite_atual),
             novo_limite_solicitado=float(novo_limite_solicitado),
             status_pedido=status_pedido,  # type: ignore
@@ -255,5 +261,20 @@ class CSVManager:
             df.to_csv(self.requests_path, index=False)
 
         return record
+
+    def update_request_status(self, cpf: str, data_hora_solicitacao: str, novo_status: str) -> bool:
+        raw_cpf = clean_cpf(cpf)
+        with _lock:
+            df = pd.read_csv(self.requests_path, dtype={"cpf_cliente": str})
+            mask = (
+                (df["cpf_cliente"].astype(str).apply(clean_cpf) == raw_cpf)
+                & (df["data_hora_solicitacao"].astype(str) == str(data_hora_solicitacao))
+            )
+            idx = df[mask].index
+            if idx.empty:
+                return False
+            df.loc[idx, "status_pedido"] = str(novo_status)
+            df.to_csv(self.requests_path, index=False)
+            return True
 
 csv_manager = CSVManager()
