@@ -6,7 +6,10 @@ from src.config import GEMINI_MODEL, GOOGLE_API_KEY
 def get_llm(api_key: Optional[str] = None, temperature: float = 0.2):
     key = api_key or GOOGLE_API_KEY or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not key:
-        key = "AIzaSy_placeholder_key"
+        raise RuntimeError(
+            "GOOGLE_API_KEY não configurada. Defina a chave no arquivo .env "
+            "antes de iniciar o atendimento."
+        )
     
     return ChatGoogleGenerativeAI(
         model=GEMINI_MODEL,

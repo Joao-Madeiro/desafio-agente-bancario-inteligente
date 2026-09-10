@@ -40,6 +40,9 @@ class CSVManager:
         self.clients_path = Path(clients_path)
         self.requests_path = Path(requests_path)
         self.score_path = Path(score_path)
+        self.clients_path.parent.mkdir(parents=True, exist_ok=True)
+        self.requests_path.parent.mkdir(parents=True, exist_ok=True)
+        self.score_path.parent.mkdir(parents=True, exist_ok=True)
         self._ensure_files()
 
     def _ensure_files(self) -> None:

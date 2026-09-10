@@ -96,7 +96,7 @@ flowchart TD
 
 ### Pré-requisitos
 
-- Python 3.10 ou superior.
+- Python 3.12 ou superior.
 - Chave da API do Google Gemini.
 
 Crie um arquivo `.env` na raiz:
@@ -124,6 +124,14 @@ Acesse:
 
 ```bash
 streamlit run app_streamlit.py
+```
+
+### Testes
+
+Se necessário, instale a dependência de testes com `pip install -e ".[test]"` e execute:
+
+```bash
+python -m pytest -q
 ```
 
 ### Deploy no Vercel
