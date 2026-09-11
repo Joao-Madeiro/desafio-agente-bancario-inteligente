@@ -1,29 +1,5 @@
-import math
-from typing import Any
-
 from langchain_core.tools import tool
-from src.database.csv_manager import csv_manager
-
-
-def parse_money(value: object) -> float:
-    """Converte valores numéricos e formatos monetários comuns do português."""
-    if isinstance(value, str):
-        normalized = value.strip().replace("R$", "").replace(" ", "")
-        if "," in normalized and "." in normalized:
-            normalized = normalized.replace(".", "").replace(",", ".")
-        elif "," in normalized:
-            normalized = normalized.replace(",", ".")
-        elif normalized.count(".") > 1 or (
-            normalized.count(".") == 1
-            and len(normalized.rsplit(".", 1)[1]) == 3
-        ):
-            normalized = normalized.replace(".", "")
-        value = normalized
-
-    amount = float(value)
-    if not math.isfinite(amount):
-        raise ValueError("O valor deve ser finito.")
-    return amount
+from src.database.csv_manager import csv_manager, clean_cpf
 
 @tool
 def consultar_limite_credito(cpf: str) -> str:
@@ -38,7 +14,7 @@ def consultar_limite_credito(cpf: str) -> str:
     )
 
 @tool
-def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: Any) -> str:
+def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: float) -> str:
     """Processa um pedido formal de aumento de limite de crédito para o cliente.
     Verifica a compatibilidade com a tabela de score x limite e registra a solicitação."""
     client = csv_manager.find_client_by_cpf(cpf)
@@ -46,7 +22,7 @@ def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: Any) 
         return "ERRO: Cliente não encontrado para processar a solicitação."
 
     try:
-        novo_limite = parse_money(novo_limite_solicitado)
+        novo_limite = float(novo_limite_solicitado)
     except (ValueError, TypeError):
         return "ERRO: O valor do novo limite deve ser um número válido."
 
@@ -59,20 +35,21 @@ def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: Any) 
     score_rule = csv_manager.get_score_rule_for_score(client.score_credito)
     max_permitido = score_rule.limite_maximo_permitido if score_rule else 0.0
 
+    pedido = csv_manager.record_limit_request(
+        cpf=client.cpf,
+        limite_atual=client.limite_credito,
+        novo_limite_solicitado=novo_limite,
+        status_pedido="pendente",
+    )
+
     if novo_limite <= max_permitido:
         status = "aprovado"
-        try:
-            pedido = csv_manager.record_limit_request(
-                cpf=client.cpf,
-                limite_atual=client.limite_credito,
-                novo_limite_solicitado=novo_limite,
-                status_pedido=status,
-            )
-        except Exception:
-            return "ERRO: Não foi possível registrar a solicitação de aumento."
-        if not csv_manager.update_client_limit(client.cpf, novo_limite):
-            csv_manager.update_request_status(client.cpf, pedido.data_hora_solicitacao, "rejeitado")
-            return "ERRO: Não foi possível atualizar o limite. A solicitação não foi registrada."
+        csv_manager.update_client_limit(client.cpf, novo_limite)
+        csv_manager.update_request_status(
+            pedido.cpf_cliente,
+            pedido.data_hora_solicitacao,
+            status,
+        )
         return (
             f"SOLICITACAO_APROVADA: Parabéns! Seu pedido de aumento de limite para R$ {novo_limite:.2f} "
             f"foi APROVADO com base no seu score atual ({client.score_credito} pts - {score_rule.descricao_faixa if score_rule else ''}). "
@@ -80,15 +57,11 @@ def processar_solicitacao_aumento_limite(cpf: str, novo_limite_solicitado: Any) 
         )
     else:
         status = "rejeitado"
-        try:
-            csv_manager.record_limit_request(
-                cpf=client.cpf,
-                limite_atual=client.limite_credito,
-                novo_limite_solicitado=novo_limite,
-                status_pedido=status,
-            )
-        except Exception:
-            return "ERRO: Não foi possível registrar a solicitação de aumento."
+        csv_manager.update_request_status(
+            pedido.cpf_cliente,
+            pedido.data_hora_solicitacao,
+            status,
+        )
         return (
             f"SOLICITACAO_REJEITADA: A solicitação de aumento para R$ {novo_limite:.2f} foi REJEITADA. "
             f"Com seu score atual de {client.score_credito} pontos ({score_rule.descricao_faixa if score_rule else ''}), "

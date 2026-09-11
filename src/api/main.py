@@ -3,7 +3,6 @@ import base64
 import hashlib
 import hmac
 import json
-import secrets
 import uuid
 from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -39,7 +38,9 @@ SESSION_COOKIE_MAX_AGE = 60 * 60 * 24
 SESSION_COOKIE_PREFIX = "madeiro-session-"
 SESSION_SECRET = (
     os.getenv("SESSION_SECRET")
-    or secrets.token_urlsafe(32)
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("GEMINI_API_KEY")
+    or "madeiro-bank-development-session-secret"
 )
 
 
@@ -223,13 +224,8 @@ async def chat_endpoint(payload: ChatRequest, request: Request, response: Respon
             is_finished=state.get("is_finished", False),
         )
 
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="O atendimento está temporariamente indisponível. Tente novamente em instantes.",
-        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro no processamento do agente: {str(exc)}")
 
 @app.post("/api/reset")
 def reset_session(

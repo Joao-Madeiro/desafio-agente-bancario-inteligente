@@ -237,12 +237,6 @@ function TypingMarkdownContent({ content }) {
   );
 }
 
-function quoteValue(quotes, code) {
-  const quote = String(quotes?.[code] || "");
-  const match = quote.match(/Compra:\s*R\$\s*([\d.,]+)/i);
-  return match ? `R$ ${match[1]}` : "Indisponível";
-}
-
 // Renderizador Markdown autônomo (fallback): suporta negrito (**), itálico (*),
 // títulos (#/##/###), listas (- / 1.) e quebras de linha.
 function renderMarkdown(text) {
@@ -307,10 +301,7 @@ function renderMarkdown(text) {
 }
 
 function BancoAgilApp() {
-  const [sessionId, setSessionId] = useState(() => (
-    window.localStorage.getItem("madeiro-session-id") ||
-    ("sess_" + Math.random().toString(36).substr(2, 9))
-  ));
+  const [sessionId, setSessionId] = useState(() => "sess_" + Math.random().toString(36).substr(2, 9));
   
   const [messages, setMessages] = useState([
     {
@@ -357,10 +348,6 @@ function BancoAgilApp() {
     document.body.classList.toggle("theme-light-body", isLightTheme);
     window.localStorage.setItem("madeiro-theme", isLightTheme ? "light" : "dark");
   }, [isLightTheme]);
-
-  useEffect(() => {
-    window.localStorage.setItem("madeiro-session-id", sessionId);
-  }, [sessionId]);
 
   const loadAllData = async () => {
     setIsRefreshingData(true);
@@ -530,6 +517,8 @@ function BancoAgilApp() {
     handleSendMessage(`Meu CPF é ${formatAuthCpf(cpf)} e minha data de nascimento é ${dob}`);
   };
 
+  const currentAgentMeta = AGENT_CONFIGS[activeAgent] || AGENT_CONFIGS.triage;
+
   return (
     <div className={`flex flex-col h-screen max-h-screen overflow-hidden bg-[#0a0e17] ${isLightTheme ? "theme-light" : ""}`}>
       {/* Top Header */}
@@ -554,9 +543,9 @@ function BancoAgilApp() {
             <ReactIcon name={isLightTheme ? "moon" : "sun"} size={15} />
             <span className="hidden md:inline text-xs">{isLightTheme ? "Escuro" : "Claro"}</span>
           </button>
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 text-xs font-semibold">
-            <i className="fa-solid fa-shield-halved"></i>
-            <span>Atendimento seguro</span>
+          <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold ${currentAgentMeta.bg} ${currentAgentMeta.border}`}>
+            <i className={`fa-solid ${currentAgentMeta.icon}`}></i>
+            <span>Especialista: <strong>{currentAgentMeta.name}</strong></span>
           </div>
 
           <button
@@ -575,11 +564,36 @@ function BancoAgilApp() {
         {/* Left Column: Chat Area */}
         <div className="flex-1 flex flex-col h-full bg-[#0a0e17] border-r border-slate-800/80">
           
+          {/* Real-Time Agent Pipeline Tracker */}
           <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/60 flex items-center justify-between overflow-x-auto custom-scrollbar">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <i className="fa-solid fa-lock text-emerald-400"></i>
-              <span>Conversa protegida e integrada</span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">Especialistas:</span>
+              {AGENT_PIPELINE.map((agentKey, idx) => {
+                const conf = AGENT_CONFIGS[agentKey];
+                const isActive = activeAgent === agentKey;
+                return (
+                  <React.Fragment key={agentKey}>
+                    <div
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all ${
+                        isActive
+                          ? `${conf.bg} ${conf.border} border font-bold shadow-md shadow-brand-500/10 scale-105`
+                          : "text-slate-500 hover:text-slate-400 bg-slate-800/30"
+                      }`}
+                    >
+                      <i className={`fa-solid ${conf.icon} text-[10px]`}></i>
+                      <span>{conf.shortName}</span>
+                      {isActive && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-white/10 font-mono ml-0.5">ATIVO</span>
+                      )}
+                    </div>
+                    {idx < AGENT_PIPELINE.length - 1 && (
+                      <i className="fa-solid fa-chevron-right text-[9px] text-slate-700"></i>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
+
             {clientInfo && (
               <div className="flex items-center gap-2 text-xs text-slate-300 ml-4 shrink-0">
                 <i className="fa-solid fa-user-check text-emerald-400"></i>
@@ -595,6 +609,8 @@ function BancoAgilApp() {
               const msg = item;
               if (msg.type === "transition") return null;
               const isBot = msg.role === "assistant";
+              const agentMeta = AGENT_CONFIGS[msg.agent] || AGENT_CONFIGS.triage;
+
               return (
                 <div
                   key={index}
@@ -602,9 +618,9 @@ function BancoAgilApp() {
                 >
                   {isBot && (
                     <div className="flex items-center gap-2 mb-1 pl-1">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-700 bg-slate-800/70 text-slate-300 flex items-center gap-1.5">
-                        <i className="fa-solid fa-building-columns"></i>
-                        Madeiro Bank
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${agentMeta.bg} ${agentMeta.border} flex items-center gap-1.5`}>
+                        <i className={`fa-solid ${agentMeta.icon}`}></i>
+                        {agentMeta.badge}
                       </span>
                       <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
                     </div>
@@ -656,9 +672,9 @@ function BancoAgilApp() {
             {isLoading && (
               <div className="flex flex-col items-start mr-auto max-w-xl">
                 <div className="flex items-center gap-2 mb-1 pl-1">
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-700 bg-slate-800/70 text-slate-300 flex items-center gap-1.5">
-                    <i className="fa-solid fa-building-columns"></i>
-                    Madeiro Bank
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${currentAgentMeta.bg} ${currentAgentMeta.border} flex items-center gap-1.5`}>
+                    <i className={`fa-solid ${currentAgentMeta.icon}`}></i>
+                    {currentAgentMeta.badge}
                   </span>
                   <span className="text-[10px] text-slate-500">Digitando...</span>
                 </div>
@@ -666,7 +682,7 @@ function BancoAgilApp() {
                   <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce"></div>
                   <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce [animation-delay:0.2s]"></div>
                   <div className="w-2 h-2 rounded-full bg-brand-500 animate-bounce [animation-delay:0.4s]"></div>
-                  <span className="text-xs text-slate-400 ml-2">Processando seu atendimento...</span>
+                  <span className="text-xs text-slate-400 ml-2">Processando com {currentAgentMeta.name}...</span>
                 </div>
               </div>
             )}
@@ -819,11 +835,11 @@ function BancoAgilApp() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-slate-800/40 p-2 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400 font-medium">USD / Dólar</div>
-                <div className="font-bold text-white">{quoteValue(ratesData, "USD")}</div>
+                <div className="font-bold text-white">R$ 5,75</div>
               </div>
               <div className="bg-slate-800/40 p-2 rounded-lg border border-slate-800">
                 <div className="text-[10px] text-slate-400 font-medium">EUR / Euro</div>
-                <div className="font-bold text-white">{quoteValue(ratesData, "EUR")}</div>
+                <div className="font-bold text-white">R$ 6,22</div>
               </div>
             </div>
           </div>

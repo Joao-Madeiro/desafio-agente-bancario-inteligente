@@ -10,11 +10,7 @@ from src.agents.prompts import CREDIT_PROMPT, EXCHANGE_PROMPT, INTERVIEW_PROMPT,
 from src.agents.state import AgentState, AgentType
 from src.database.csv_manager import clean_cpf, csv_manager
 from src.tools.auth_tools import autenticar_cliente, solicitar_dados_autenticacao
-from src.tools.credit_tools import (
-    consultar_limite_credito,
-    parse_money,
-    processar_solicitacao_aumento_limite,
-)
+from src.tools.credit_tools import consultar_limite_credito, processar_solicitacao_aumento_limite
 from src.tools.exchange_tools import consultar_cotacao_moeda
 from src.tools.interview_tools import processar_entrevista_e_atualizar_score
 from src.tools.session_tools import encerrar_sessao_atendimento, transferir_para_agente
@@ -33,13 +29,6 @@ ALL_TOOLS = {
     "consultar_cotacao_moeda": consultar_cotacao_moeda,
     "encerrar_sessao_atendimento": encerrar_sessao_atendimento,
     "transferir_para_agente": transferir_para_agente,
-}
-
-AGENT_ALLOWED_TOOLS = {
-    "triage": {"solicitar_dados_autenticacao", "autenticar_cliente", "transferir_para_agente", "encerrar_sessao_atendimento"},
-    "credit": {"consultar_limite_credito", "processar_solicitacao_aumento_limite", "transferir_para_agente", "encerrar_sessao_atendimento"},
-    "interview": {"processar_entrevista_e_atualizar_score", "transferir_para_agente", "encerrar_sessao_atendimento"},
-    "exchange": {"consultar_cotacao_moeda", "transferir_para_agente", "encerrar_sessao_atendimento"},
 }
 
 def extract_clean_text(content: Any) -> str:
@@ -171,100 +160,15 @@ def _extract_text_from_string(text: str) -> str:
 
     return content_stripped
 
-def _parse_interview_amount(value: str) -> Optional[float]:
-    try:
-        return parse_money(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _collect_interview_data(
-    messages: List[BaseMessage], existing: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Retém respostas da entrevista mesmo quando o histórico é reduzido no cookie."""
-    data = dict(existing or {})
-    human_text = "\n".join(
-        str(message.content)
-        for message in messages
-        if isinstance(message, HumanMessage)
-    )
-    normalized = human_text.lower()
-
-    amount_pattern = r"(?:r\$\s*)?(\d[\d.\s]*(?:,\d+)?)"
-    income_match = re.search(
-        rf"(?:renda|sal[aá]rio|ganho)[^\d]{{0,30}}{amount_pattern}", normalized
-    )
-    expense_match = re.search(
-        rf"(?:despesas?|gastos?)[^\d]{{0,30}}{amount_pattern}", normalized
-    )
-    if income_match:
-        amount = _parse_interview_amount(income_match.group(1))
-        if amount is not None:
-            data["renda_mensal"] = amount
-    if expense_match:
-        amount = _parse_interview_amount(expense_match.group(1))
-        if amount is not None:
-            data["despesas"] = amount
-
-    employment_match = re.search(
-        r"\b(formal|aut[oô]nom[oa]|desempregad[oa])\b", normalized
-    )
-    if employment_match:
-        employment = employment_match.group(1)
-        if employment.startswith("aut"):
-            data["tipo_emprego"] = "autônomo"
-        elif employment.startswith("desempregad"):
-            data["tipo_emprego"] = "desempregado"
-        else:
-            data["tipo_emprego"] = "formal"
-
-    dependents_match = re.search(
-        r"(?:dependentes?|filhos?)[^\d]{0,20}(3\s*\+|3\s+ou\s+mais|\d+)", normalized
-    )
-    if dependents_match:
-        value = dependents_match.group(1).replace(" ", "")
-        data["num_dependentes"] = 3 if "+" in value or "oumais" in value else int(value)
-
-    debts_match = re.search(
-        r"d[ií]vidas?[^\n.!?]{0,25}\b(sim|n[aã]o)\b", normalized
-    )
-    if debts_match:
-        data["tem_dividas"] = "sim" if debts_match.group(1) == "sim" else "não"
-    elif re.search(r"n[aã]o\s+(?:possuo|tenho)\s+d[ií]vidas?", normalized):
-        data["tem_dividas"] = "não"
-
-    return data
-
-
-def execute_tools(
-    messages: List[BaseMessage],
-    authorized_cpf: Optional[str] = None,
-    interview_data: Optional[Dict[str, Any]] = None,
-    allowed_tools: Optional[set[str]] = None,
-) -> List[ToolMessage]:
+def execute_tools(messages: List[BaseMessage]) -> List[ToolMessage]:
     last_message = messages[-1]
     tool_messages = []
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
-            tool_args = dict(tool_call.get("args") or {})
-            if tool_name == "processar_entrevista_e_atualizar_score":
-                tool_args = {
-                    **(interview_data or {}),
-                    **{key: value for key, value in tool_args.items() if value is not None},
-                }
-            if authorized_cpf and tool_name in {
-                "consultar_limite_credito",
-                "processar_solicitacao_aumento_limite",
-                "processar_entrevista_e_atualizar_score",
-            }:
-                # O CPF da sessão autenticada prevalece sobre argumentos gerados pelo modelo.
-                tool_args["cpf"] = authorized_cpf
+            tool_args = tool_call["args"]
             tool_fn = ALL_TOOLS.get(tool_name)
-            if allowed_tools is not None and tool_name not in allowed_tools:
-                tool_fn = None
-                result = f"ERRO: A ferramenta {tool_name} está fora do escopo deste agente."
-            elif tool_fn:
+            if tool_fn:
                 try:
                     result = tool_fn.invoke(tool_args)
                 except Exception as exc:
@@ -355,9 +259,6 @@ class AgentOrchestrator:
         agent_name: AgentType,
     ) -> Dict[str, Any]:
         messages = _sanitize_history(state["messages"])
-        interview_data = _collect_interview_data(
-            state.get("messages", []), state.get("interview_data", {})
-        )
         client_context = ""
         if state.get("authenticated") and state.get("client_cpf"):
             client = csv_manager.find_client_by_cpf(state["client_cpf"])
@@ -368,14 +269,6 @@ class AgentOrchestrator:
                     f"Limite Atual: R$ {client.limite_credito:.2f}\n"
                     f"Score Atual: {client.score_credito} pontos"
                 )
-
-        interview_context = ""
-        if agent_name == "interview" and interview_data:
-            interview_context = (
-                "\n\n[DADOS JÁ COLETADOS NA ENTREVISTA]\n"
-                + json.dumps(interview_data, ensure_ascii=False)
-                + "\nUse esses dados e pergunte somente o que ainda estiver faltando."
-            )
 
         redirect_note = ""
         if agent_name == "credit" and state.get("interview_completed"):
@@ -397,20 +290,16 @@ class AgentOrchestrator:
                 "cliente deseja solicitar um novo limite de crédito agora."
             )
 
-        sys_msg = SystemMessage(
-            content=prompt + client_context + interview_context + redirect_note
-        )
+        sys_msg = SystemMessage(content=prompt + client_context + redirect_note)
         conversation = [sys_msg] + messages
 
         updated_state: Dict[str, Any] = {
             "messages": [],
             "active_agent": agent_name,
             "request_auth_modal": False,
-            "interview_data": interview_data,
         }
         if agent_name == "credit" and state.get("interview_completed"):
             updated_state["interview_completed"] = False
-            updated_state["interview_data"] = {}
         transfer_target: Optional[str] = None
         auth_attempts = state.get("auth_attempts", 0)
 
@@ -425,12 +314,7 @@ class AgentOrchestrator:
                 updated_state["messages"].append(raw_response)
                 break
 
-            tool_results = execute_tools(
-                [raw_response],
-                authorized_cpf=state.get("client_cpf") if state.get("authenticated") else None,
-                interview_data=interview_data,
-                allowed_tools=AGENT_ALLOWED_TOOLS.get(agent_name),
-            )
+            tool_results = execute_tools([raw_response])
 
             # Bloqueio de escopo: a Triagem só transfere após autenticar o cliente.
             for tr in tool_results:
@@ -469,16 +353,10 @@ class AgentOrchestrator:
                         updated_state["client_name"] = match_nome.group(1)
                 elif "FALHA_AUTENTICACAO" in tr_content:
                     auth_attempts += 1
-                    auth_attempts = min(auth_attempts, 3)
                     updated_state["auth_attempts"] = auth_attempts
                     if auth_attempts >= 3:
                         updated_state["is_finished"] = True
                         updated_state["active_agent"] = "ended"
-                        updated_state["request_auth_modal"] = False
-                        try:
-                            encerrar_sessao_atendimento.invoke({})
-                        except Exception:
-                            pass
                 elif "SESSAO_ENCERRADA" in tr_content:
                     updated_state["is_finished"] = True
                     updated_state["active_agent"] = "ended"
@@ -495,7 +373,7 @@ class AgentOrchestrator:
                         transfer_target = target
                         updated_state["active_agent"] = target
 
-            if updated_state.get("is_finished") or transfer_target:
+            if transfer_target:
                 break
 
         if not updated_state["messages"] and not transfer_target:

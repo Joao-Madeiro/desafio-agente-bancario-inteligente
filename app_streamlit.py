@@ -94,11 +94,7 @@ with st.sidebar:
     st.title("🏦 Madeiro Bank")
 
     if not st.session_state.orchestrator:
-        try:
-            st.session_state.orchestrator = AgentOrchestrator()
-        except RuntimeError as exc:
-            st.error(str(exc))
-            st.stop()
+        st.session_state.orchestrator = AgentOrchestrator()
 
     st.divider()
 
@@ -164,10 +160,9 @@ for item in st.session_state.chat_history:
     msg = item
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
-            st.markdown(
-                '<span class="agent-badge badge-triage">Madeiro Bank</span>',
-                unsafe_allow_html=True,
-            )
+            agent_key = msg.get("agent", "triage")
+            name, badge_cls = agent_labels.get(agent_key, ("Agente", "badge-triage"))
+            st.markdown(f'<span class="agent-badge {badge_cls}">🤖 {name}</span>', unsafe_allow_html=True)
         st.markdown(msg["content"])
 
 user_input = st.chat_input("Digite sua mensagem...", disabled=st.session_state.state.get("is_finished", False))

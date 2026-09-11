@@ -1,8 +1,6 @@
 import httpx
 from datetime import datetime
 from langchain_core.tools import tool
-import re
-import unicodedata
 
 CURRENCY_NAMES = {
     "USD": "Dólar Americano",
@@ -14,46 +12,15 @@ CURRENCY_NAMES = {
     "CHF": "Franco Suíço",
 }
 
-CURRENCY_ALIASES = {
-    "dolar": "USD",
-    "dolaramericano": "USD",
-    "dollar": "USD",
-    "euro": "EUR",
-    "libra": "GBP",
-    "libraesterlina": "GBP",
-    "bitcoin": "BTC",
-    "btc": "BTC",
-    "dolarcanadense": "CAD",
-    "iene": "JPY",
-    "ienejapones": "JPY",
-    "francosuico": "CHF",
-}
-
-
-def normalize_currency(value: object) -> str:
-    raw_value = str(value or "").strip()
-    folded = unicodedata.normalize("NFKD", raw_value)
-    folded = "".join(char for char in folded if not unicodedata.combining(char))
-    normalized = re.sub(r"[^a-zA-Z]", "", folded).lower()
-    if normalized in CURRENCY_ALIASES:
-        return CURRENCY_ALIASES[normalized]
-
-    code = re.sub(r"[^a-zA-Z]", "", raw_value).upper()
-    if len(code) == 3:
-        return code
-    return ""
-
 @tool
 def consultar_cotacao_moeda(moeda: str = "USD") -> str:
     """Consulta a cotação de moedas estrangeiras em relação ao Real Brasileiro (BRL) em tempo real.
     Suporta moedas como USD (Dólar), EUR (Euro), GBP (Libra), BTC (Bitcoin), etc."""
-    raw_moeda = str(moeda or "").strip()
-    moeda_code = normalize_currency(raw_moeda) if raw_moeda else "USD"
-    if not moeda_code:
-        return (
-            f"ERRO: Não foi possível identificar a moeda '{raw_moeda}'. "
-            "Informe um código de três letras ou uma moeda como dólar, euro ou bitcoin."
-        )
+    moeda_code = str(moeda).strip().upper()
+    if not moeda_code or len(moeda_code) < 3:
+        moeda_code = "USD"
+    else:
+        moeda_code = moeda_code[:3]
 
     api_url = f"https://economia.awesomeapi.com.br/last/{moeda_code}-BRL"
     
